@@ -24,13 +24,13 @@ void *json_parse_thread(void *arg) {
 }
 
 // 订阅消息回调函数（实时监听）// MQTT 订阅回调函数
-void messageArrived(void *context, char *topicName, int topicLen, MQTTClient_message *message) {
+int messageArrived(void *context, char *topicName, int topicLen, MQTTClient_message *message) {
     // 检查是否是目标主题
     if (strcmp(topicName, TOPIC_SUB) != 0) {
         printf("收到无关主题 %s 的消息，忽略。\n", topicName);
         MQTTClient_freeMessage(&message);
         MQTTClient_free(topicName);
-        return;
+        return 1;
     }
 
     printf("收到来自主题 %s 的消息:\n", topicName);
