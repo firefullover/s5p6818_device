@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "camera.h": "c",
+        "engine.h": "c",
+        "mymqtt.h": "c",
+        "stdio.h": "c"
+    }
+}

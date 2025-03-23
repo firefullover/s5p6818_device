@@ -1,63 +1,82 @@
 #include "engine.h"
 
-// 舵机初始角度（90 度）
+// 全局变量定义（带初始值）
 double eng2_deg = 90.0;
 double eng3_deg = 90.0;
+pthread_mutex_t engine_mutex = PTHREAD_MUTEX_INITIALIZER;  // 初始化互斥锁
 
-// 发送角度变化命令到舵机
-void control_engine(int command, double *angle, double new_angle) {
-    if (new_angle < 0 || new_angle > 180) {
-        printf("角度超出范围 (0-180)，保持当前角度: %.1f 度\n", *angle);
-        return;
+static int engine_fd = -1;  // 设备文件描述符
+
+// 初始化舵机设备
+void engine_init() {
+    engine_fd = open(ENGINE_DEVICE, O_RDWR);
+    if (engine_fd < 0) {
+        perror("舵机设备初始化失败");
+        exit(EXIT_FAILURE); // 退出程序
     }
-
-    int fd = open(ENGINE_DEVICE, O_RDWR);
-    if (fd < 0) {
-        perror("打开舵机设备失败");
-        return;
-    }
-
-    double diff = new_angle - *angle;
-    int steps = (int)(diff / DEG_UNIT);
-
-    if (steps != 0) {
-        ioctl(fd, steps, command);  // 发送控制命令
-        *angle = new_angle;         // 更新角度
-        printf("舵机 %d 角度调整为 %.1f 度\n", command, *angle);
-    }
-
-    close(fd);
+    printf("舵机设备打开\n");
 }
 
-// 舵机复位（将角度恢复到 90°）
+// 解析 JSON 数据并控制舵机
+void parse_json_and_control(const char *json_data) {
+    char *angle_y_pos = strstr(json_data, "\"angle_y\":");
+    char *angle_z_pos = strstr(json_data, "\"angle_z\":");
+
+    if (angle_y_pos && angle_z_pos) {
+        double new_eng2_deg = 0, new_eng3_deg = 0;
+
+        if (sscanf(angle_y_pos, "\"angle_y\":%lf", &new_eng2_deg) == 1 &&
+            sscanf(angle_z_pos, "\"angle_z\":%lf", &new_eng3_deg) == 1) {
+
+            // 控制舵机
+            control_engine(Engine2, &eng2_deg, new_eng2_deg);
+            control_engine(Engine3, &eng3_deg, new_eng3_deg);
+        } else {
+            printf("JSON 数据格式错误\n");
+        }
+    } else {
+        printf("JSON 解析失败: 关键字段缺失\n");
+    }
+}
+
+
+// 复位到初始角度
 void reset_engine() {
-    printf("舵机复位中...\n");
+    printf("开始复位舵机...\n");
     control_engine(Engine2, &eng2_deg, 90.0);
     control_engine(Engine3, &eng3_deg, 90.0);
-    printf("舵机复位完成: eng2 = %.1f, eng3 = %.1f\n", eng2_deg, eng3_deg);
+    printf("复位完成: 当前角度 eng2=%.1f, eng3=%.1f\n", eng2_deg, eng3_deg);
 }
 
-// 解析 JSON 并控制舵机
-void parse_json_and_control(const char *json_data) {
-    cJSON *root = cJSON_Parse(json_data);
-    if (!root) {
-        printf("JSON 解析失败\n");
-        return;
+// 控制舵机核心逻辑
+void control_engine(int command, double *angle, double new_angle) {
+    pthread_mutex_lock(&engine_mutex);  // 加锁
+    
+    // 计算步进数（四舍五入）
+    double diff = new_angle - *angle;
+    int steps = (int)round(diff / DEG_UNIT);  // 使用更精确的round
+    
+    if (steps != 0) {
+        // 构造ioctl参数
+        struct engine_angle arg = {
+            .command = command,
+            .steps = steps
+        };
+        
+        if (ioctl(engine_fd, ENGINE_SET_ANGLE, &arg) < 0) {  // 使用新命令
+            perror("舵机控制失败");
+        } else {
+            *angle = new_angle;  // 更新角度
+            printf("舵机 %d 已调整到 %.1f 度 (步进 %d)\n",  command, *angle, steps);
+        }
     }
+    pthread_mutex_unlock(&engine_mutex);  // 解锁
+}
 
-    cJSON *eng2_json = cJSON_GetObjectItem(root, "eng2");
-    cJSON *eng3_json = cJSON_GetObjectItem(root, "eng3");
-
-    if (cJSON_IsNumber(eng2_json) && cJSON_IsNumber(eng3_json)) {
-        double new_eng2_deg = eng2_json->valuedouble;
-        double new_eng3_deg = eng3_json->valuedouble;
-
-        // 控制舵机
-        control_engine(Engine2, &eng2_deg, new_eng2_deg);
-        control_engine(Engine3, &eng3_deg, new_eng3_deg);
-    } else {
-        printf("JSON 数据格式错误\n");
+void engine_close() {
+    if (engine_fd >= 0) {
+        close(engine_fd);
+        engine_fd = -1;
+        printf("舵机设备已关闭\n");
     }
-
-    cJSON_Delete(root);
 }
