@@ -17,6 +17,7 @@
 #define TOPIC_PUB         "6818_image"     // 发布主题
 
 volatile sig_atomic_t running = 1;         // 控制主循环运行标志
+struct mosquitto *mosq = NULL;  // 定义 MQTT 客户端指针
 
 void handle_signal(int s)
 {
@@ -97,7 +98,6 @@ void publish_camera_data() {
 }
 
 int main() {
-    struct mosquitto *mosq = NULL;  // 定义 MQTT 客户端指针
     int rc;                         // 定义返回值变量
     signal(SIGINT, handle_signal);
     engine_init();
@@ -132,7 +132,7 @@ int main() {
     }
 
     // 主循环（示例每秒发布图像）
-    while (!finished) {
+    while (running) {
         sleep(1);
     }
 

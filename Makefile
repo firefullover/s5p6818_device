@@ -5,16 +5,16 @@ CFLAGS = -Wall -g
 # 当前文件夹中的所有 .c 文件
 SRC = $(wildcard *.c)
 
-KON = -lpaho-mqtt3c -lmosquitto
+KON = 
 
-THREAD = -pthread
+THREAD = -pthread -lmosquitto -lm
 
 # 目标可执行文件名
 TARGET = myprogram
 
 # 生成目标
 $(TARGET): $(SRC)
-	$(CC) $(SRC) -o $(KON) $(TARGET) $(THREAD)
+	$(CC) $(SRC) -o $(TARGET) $(THREAD)
 
 # 清理目标
 clean:
