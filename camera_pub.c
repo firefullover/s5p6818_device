@@ -38,3 +38,4 @@ void get_camera_data(unsigned char **buffer, long *size) {
     // 关闭文件
     fclose(file);
 }
+

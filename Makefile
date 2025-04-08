@@ -2,20 +2,19 @@
 CC = gcc
 CFLAGS = -Wall -g
 
-# 当前文件夹中的所有 .c 文件
+# 源文件列表（明确指定）
 SRC = $(wildcard *.c)
 
-KON = 
-
-THREAD = -pthread -lmosquitto -lm
+# 链接库选项（修正后的）
+LIBS = -pthread -lpaho-mqtt3c -ljpeg -lm
 
 # 目标可执行文件名
 TARGET = myprogram
 
-# 生成目标
+# 生成目标（添加文件依赖关系）
 $(TARGET): $(SRC)
-	$(CC) $(SRC) -o $(TARGET) $(THREAD)
+	$(CC) $(CFLAGS) $(SRC) -o $(TARGET) $(LIBS)
 
-# 清理目标
+# 清理目标（添加中间文件清理）
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) *.o
