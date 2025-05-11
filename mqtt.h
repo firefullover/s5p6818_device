@@ -5,15 +5,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <sys/time.h>
 #include <MQTTClient.h>
 
-// 配置常量
-#define DEFAULT_ADDRESS   "tcp://192.168.5.109:1883" // 完整地址格式
-#define DEFAULT_CLIENT_ID "s5p6818_Client"
-#define DEFAULT_QOS       1
-#define DEFAULT_TIMEOUT   1000
-#define TOPIC_SUB         "6050_date"
-#define TOPIC_PUB         "6818_image"
+#include "config.h"
 
 // 回调函数类型定义
 typedef void (*message_handler)(char* topic, char* payload);
@@ -22,6 +18,8 @@ typedef void (*message_handler)(char* topic, char* payload);
 typedef struct {
     MQTTClient client;
     message_handler handler;
+    int connected;                // 连接状态标志
+    unsigned long last_reconnect; // 上次重连尝试时间（毫秒时间戳）
 } mqtt_ctx;
 
 // 初始化MQTT连接

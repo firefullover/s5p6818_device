@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <time.h>
+#include "config.h"  // 包含配置文件
 #include "camera.h"
 #include "engine.h"
 #include "mqtt.h"
@@ -26,19 +28,53 @@ void on_mqtt_message(char* topic, char* payload) {
 void* video_publish_thread(void* arg) {
     (void)arg;
     
+    // 帧率控制变量
+    struct timespec start_time, end_time;
+    long elapsed_us, sleep_us;
+    const long target_frame_time_us = 1000000 / TARGET_FPS; // 根据目标帧率计算帧间隔
+    int consecutive_failures = 0;
+    const int max_failures = MAX_FAILURES; // 最大连续失败次数
+    
     while(g_running) {
+        clock_gettime(CLOCK_MONOTONIC, &start_time);
+        
         uint8_t* frame = NULL;
         size_t frame_size = 0;
         
         // 获取摄像头帧
-        if(camera_get_frame(g_camera_ctx, &frame, &frame_size, 500) == CAM_SUCCESS) {
+        int cam_result = camera_get_frame(g_camera_ctx, &frame, &frame_size, 500);
+        if(cam_result == CAM_SUCCESS) {
+            consecutive_failures = 0; // 重置失败计数
+            
             // 发布到MQTT
             if(mqtt_publish(&g_mqtt_ctx, TOPIC_PUB, frame, frame_size) != 0) {
                 fprintf(stderr, "视频发布失败\n");
+                consecutive_failures++;
+            }
+            
+            // 释放帧内存
+            camera_release_frame(frame);
+        } else {
+            fprintf(stderr, "获取摄像头帧失败: %d\n", cam_result);
+            consecutive_failures++;
+            
+            // 如果连续失败次数过多，暂停一段时间
+            if (consecutive_failures >= max_failures) {
+                fprintf(stderr, "连续失败次数过多，暂停1秒\n");
+                sleep(1);
+                consecutive_failures = 0;
             }
         }
         
-        usleep(100000); // 100ms间隔（10fps）
+        // 精确帧率控制
+        clock_gettime(CLOCK_MONOTONIC, &end_time);
+        elapsed_us = (end_time.tv_sec - start_time.tv_sec) * 1000000 + 
+                     (end_time.tv_nsec - start_time.tv_nsec) / 1000;
+        
+        sleep_us = target_frame_time_us - elapsed_us;
+        if (sleep_us > 0) {
+            usleep(sleep_us);
+        }
     }
     return NULL;
 }
@@ -74,7 +110,8 @@ int main() {
     printf("摄像头初始化完成\n");
 
     // 初始化MQTT
-    if(mqtt_init(&g_mqtt_ctx, on_mqtt_message) != 0) {
+    int mqtt_ok = mqtt_init(&g_mqtt_ctx, on_mqtt_message);
+    if(mqtt_ok != 0) {
         fprintf(stderr, "MQTT初始化失败\n");
         camera_destroy(g_camera_ctx);
         return 1;
@@ -83,9 +120,14 @@ int main() {
 
     // 创建监听线程
     pthread_t listen_tid;
-    if(pthread_create(&listen_tid, NULL, mqtt_listen_thread, NULL) != 0) {
+    int thread_ok = pthread_create(&listen_tid, NULL, mqtt_listen_thread, NULL);
+    if(thread_ok != 0) {
         fprintf(stderr, "线程创建失败\n");
-        goto cleanup;
+        mqtt_disconnect(&g_mqtt_ctx);
+        camera_destroy(g_camera_ctx);
+        engine_close();
+        printf("资源释放完成\n");
+        return 1;
     }
 
     // 在主线程运行视频发布
@@ -94,7 +136,6 @@ int main() {
     // 等待监听线程结束
     pthread_join(listen_tid, NULL);
 
-cleanup:
     // 清理资源
     printf("正在关闭资源...\n");
     mqtt_disconnect(&g_mqtt_ctx);
