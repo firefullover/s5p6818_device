@@ -7,9 +7,8 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <string.h>
+#include <cjson/cJSON.h>
 #include <math.h>
-
-// 包含配置文件
 #include "config.h"
 
 // 舵机编号定义

@@ -7,35 +7,41 @@ void get_camera_data(unsigned char **buffer, long *size) {
     // 打开图像文件，以二进制方式读取
     FILE *file = fopen(IMAGE_FILE, "rb");
     if (!file) {
-        // 文件打开失败时输出错误信息
         perror("无法打开图像文件");
-        *buffer = NULL;  // 设置 buffer 为 NULL，表示失败
+        *buffer = NULL;
         return;
     }
 
     // 将文件指针移动到文件末尾，获取文件的大小
     fseek(file, 0, SEEK_END);
-    *size = ftell(file);  // 获取文件大小
-    rewind(file);  // 将文件指针重新指向文件开头
+    *size = ftell(file);
+    rewind(file);
+
+    // 校验文件大小是否为 240*240*2 字节
+    const long required_size = 240 * 240 * 2;
+    if (*size != required_size) {
+        fprintf(stderr, "图像文件大小不正确，必须为 %ld 字节，实际为 %ld 字节\n", required_size, *size);
+        fclose(file);
+        *buffer = NULL;
+        *size = 0;
+        return;
+    }
 
     // 为 buffer 分配足够的内存来存储图像数据
     *buffer = (unsigned char *)malloc(*size);
     if (!*buffer) {
-        // 内存分配失败时输出错误信息
         perror("内存分配失败");
-        fclose(file);  // 关闭文件
+        fclose(file);
         return;
     }
 
     // 从文件中读取图像数据到 buffer 中
     if (fread(*buffer, 1, *size, file) != *size) {
-        // 如果读取的字节数与文件大小不一致，表示读取不完整
         fprintf(stderr, "图像读取不完整\n");
-        free(*buffer);  // 释放已分配的内存
-        *buffer = NULL;  // 将 buffer 设置为 NULL，表示失败
+        free(*buffer);
+        *buffer = NULL;
     }
 
-    // 关闭文件
     fclose(file);
 }
 

@@ -3,25 +3,20 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
+#include <signal.h>
 #include "config.h"  // 包含配置文件
-#include "camera.h"
+#include "camera_pub.h"
 #include "engine.h"
 #include "mqtt.h"
 
 // 全局上下文
 static mqtt_ctx g_mqtt_ctx;
-static camera_ctx* g_camera_ctx = NULL;
-static int g_running = 1;
+volatile static int g_running = 1;
 
 // 信号处理函数
 void sig_handler(int sig) {
     printf("\n收到终止信号，清理资源...\n");
     g_running = 0;
-}
-
-// MQTT消息回调函数
-void on_mqtt_message(char* topic, char* payload) {
-    printf("[MQTT消息] 主题: %s\n内容: %s\n", topic, payload);
 }
 
 // 视频发布线程函数（主线程）
@@ -38,24 +33,26 @@ void* video_publish_thread(void* arg) {
     while(g_running) {
         clock_gettime(CLOCK_MONOTONIC, &start_time);
         
-        uint8_t* frame = NULL;
-        size_t frame_size = 0;
+        unsigned char* frame = NULL;
+        long frame_size = 0;
         
-        // 获取摄像头帧
-        int cam_result = camera_get_frame(g_camera_ctx, &frame, &frame_size, 500);
-        if(cam_result == CAM_SUCCESS) {
+        // 获取图像数据（从文件读取）
+        get_camera_data(&frame, &frame_size);
+        if(frame != NULL && frame_size > 0) {
             consecutive_failures = 0; // 重置失败计数
             
             // 发布到MQTT
             if(mqtt_publish(&g_mqtt_ctx, TOPIC_PUB, frame, frame_size) != 0) {
-                fprintf(stderr, "视频发布失败\n");
+                fprintf(stderr, "图像发布失败\n");
                 consecutive_failures++;
+            } else {
+                printf("成功发布图像数据，大小: %ld 字节\n", frame_size);
             }
             
             // 释放帧内存
-            camera_release_frame(frame);
+            free(frame);
         } else {
-            fprintf(stderr, "获取摄像头帧失败: %d\n", cam_result);
+            fprintf(stderr, "获取图像数据失败\n");
             consecutive_failures++;
             
             // 如果连续失败次数过多，暂停一段时间
@@ -91,56 +88,69 @@ void* mqtt_listen_thread(void* arg) {
     return NULL;
 }
 
+// 测试 get_camera_data 并通过MQTT发送到6818_image主题
+void test_camera_data_publish() {
+    unsigned char* buffer = NULL;
+    long size = 0;
+    get_camera_data(&buffer, &size);
+    if (buffer && size > 0) {
+        printf("[TEST] 成功读取图像数据，大小: %ld 字节，准备发送到6818_image主题\n", size);
+        if (mqtt_publish(&g_mqtt_ctx, "6818_image", buffer, size) == 0) {
+            printf("[TEST] 成功通过MQTT发送到6818_image主题\n");
+        } else {
+            printf("[TEST] 通过MQTT发送失败\n");
+        }
+        free(buffer);
+    } else {
+        printf("[TEST] 读取图像数据失败\n");
+    }
+}
+
 int main() {
     // 注册信号处理
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
 
     // 初始化舵机
-    engine_init();
-    printf("舵机初始化完成\n");
-
-    // 初始化摄像头
-    int error;
-    g_camera_ctx = camera_init("/dev/video0", 640, 480, FMT_JPEG, &error);
-    if(!g_camera_ctx) {
-        fprintf(stderr, "摄像头初始化失败: %d\n", error);
-        return 1;
+    if (engine_init() != 0) {
+        printf("舵机初始化失败，程序退出。\n");
+        return -1;
     }
-    printf("摄像头初始化完成\n");
 
     // 初始化MQTT
-    int mqtt_ok = mqtt_init(&g_mqtt_ctx, on_mqtt_message);
+    int mqtt_ok = mqtt_init(&g_mqtt_ctx, NULL);
     if(mqtt_ok != 0) {
         fprintf(stderr, "MQTT初始化失败\n");
-        camera_destroy(g_camera_ctx);
+        engine_close();
         return 1;
     }
-    printf("MQTT连接成功\n");
+    printf("MQTT连接成功，已订阅主题: %s\n", TOPIC_SUB);
+
+    
 
     // 创建监听线程
     pthread_t listen_tid;
-    int thread_ok = pthread_create(&listen_tid, NULL, mqtt_listen_thread, NULL);
-    if(thread_ok != 0) {
+    if(pthread_create(&listen_tid, NULL, mqtt_listen_thread, NULL) != 0) {
         fprintf(stderr, "线程创建失败\n");
         mqtt_disconnect(&g_mqtt_ctx);
-        camera_destroy(g_camera_ctx);
         engine_close();
-        printf("资源释放完成\n");
         return 1;
     }
 
     // 在主线程运行视频发布
-    video_publish_thread(NULL);
+    // video_publish_thread(NULL);
+    // 测试：读取图像并发送到6818_image主题
+    test_camera_data_publish();
 
     // 等待监听线程结束
+    printf("MQTT持续监听...\n");
     pthread_join(listen_tid, NULL);
+    
+    printf("正在关闭资源...\n");
+    sleep(5);
 
     // 清理资源
-    printf("正在关闭资源...\n");
     mqtt_disconnect(&g_mqtt_ctx);
-    camera_destroy(g_camera_ctx);
     engine_close();
-    printf("资源释放完成\n");
     return 0;
 }
