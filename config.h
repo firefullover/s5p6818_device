@@ -3,7 +3,7 @@
 
 // ===================== MQTT配置 =====================
 // MQTT服务器地址
-#define DEFAULT_ADDRESS   "tcp://192.168.5.109:1883" 
+#define DEFAULT_ADDRESS   "tcp://192.168.50.130:1883" 
 // MQTT客户端ID，需唯一
 #define DEFAULT_CLIENT_ID "s5p6818_Client" // 设备标识名
 // MQTT消息服务质量等级，0=最多一次，1=至少一次，2=仅一次

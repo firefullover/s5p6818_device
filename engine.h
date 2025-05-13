@@ -26,7 +26,7 @@ extern double eng3_deg;
 // };
 
 void handle_angle_control(const char *json_data);
-void engine_init();
+int engine_init();
 void print_engine_angle();
 void parse_json_and_control(const char *json_data);
 void reset_engine();
