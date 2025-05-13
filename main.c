@@ -1,127 +1,156 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <MQTTClient.h>
-#include "engine.h"
+#include <unistd.h>
 #include <pthread.h>
+#include <time.h>
+#include <signal.h>
+#include "config.h"  // 包含配置文件
+#include "camera_pub.h"
+#include "engine.h"
+#include "mqtt.h"
 
-#define ADDRESS   "tcp://broker.hivemq.com:1883"  // MQTT 服务器地址
-#define CLIENTID  "C_Client"  // 客户端 ID
-#define TOPIC_SUB "6050_date"  // 订阅主题
-#define TOPIC_PUB "6818_image"  // 发布主题
-#define QOS       1  // 服务质量等级
-#define TIMEOUT   1000L  // 超时时间
-#define IMAGE_FILE "image.rgb"  // 240x240 16位RGB图像文件路径
+// 全局上下文
+static mqtt_ctx g_mqtt_ctx;
+volatile static int g_running = 1;
 
-volatile int finished = 0;  // 控制主循环的变量
+// 信号处理函数
+void sig_handler(int sig) {
+    printf("\n收到终止信号，清理资源...\n");
+    g_running = 0;
+}
 
-// 线程函数，负责解析 JSON 并控制舵机
-void *json_parse_thread(void *arg) {
-    char *json_data = (char *)arg;
-    parse_json_and_control(json_data);  // 解析 JSON 并控制舵机
-    free(json_data);  // 释放动态分配的内存
+// 视频发布线程函数（主线程）
+void* video_publish_thread(void* arg) {
+    (void)arg;
+    
+    // 帧率控制变量
+    struct timespec start_time, end_time;
+    long elapsed_us, sleep_us;
+    const long target_frame_time_us = 1000000 / TARGET_FPS; // 根据目标帧率计算帧间隔
+    int consecutive_failures = 0;
+    const int max_failures = MAX_FAILURES; // 最大连续失败次数
+    
+    while(g_running) {
+        clock_gettime(CLOCK_MONOTONIC, &start_time);
+        
+        unsigned char* frame = NULL;
+        long frame_size = 0;
+        
+        // 获取图像数据（从文件读取）
+        get_camera_data(&frame, &frame_size);
+        if(frame != NULL && frame_size > 0) {
+            consecutive_failures = 0; // 重置失败计数
+            
+            // 发布到MQTT
+            if(mqtt_publish(&g_mqtt_ctx, TOPIC_PUB, frame, frame_size) != 0) {
+                fprintf(stderr, "图像发布失败\n");
+                consecutive_failures++;
+            } else {
+                printf("成功发布图像数据，大小: %ld 字节\n", frame_size);
+            }
+            
+            // 释放帧内存
+            free(frame);
+        } else {
+            fprintf(stderr, "获取图像数据失败\n");
+            consecutive_failures++;
+            
+            // 如果连续失败次数过多，暂停一段时间
+            if (consecutive_failures >= max_failures) {
+                fprintf(stderr, "连续失败次数过多，暂停1秒\n");
+                sleep(1);
+                consecutive_failures = 0;
+            }
+        }
+        
+        // 精确帧率控制
+        clock_gettime(CLOCK_MONOTONIC, &end_time);
+        elapsed_us = (end_time.tv_sec - start_time.tv_sec) * 1000000 + 
+                     (end_time.tv_nsec - start_time.tv_nsec) / 1000;
+        
+        sleep_us = target_frame_time_us - elapsed_us;
+        if (sleep_us > 0) {
+            usleep(sleep_us);
+        }
+    }
     return NULL;
 }
 
-// 订阅消息回调函数（实时监听）// MQTT 订阅回调函数
-int messageArrived(void *context, char *topicName, int topicLen, MQTTClient_message *message) {
-    // 检查是否是目标主题
-    if (strcmp(topicName, TOPIC_SUB) != 0) {
-        printf("收到无关主题 %s 的消息，忽略。\n", topicName);
-        MQTTClient_freeMessage(&message);
-        MQTTClient_free(topicName);
-        return 1;
+// MQTT监听线程函数
+void* mqtt_listen_thread(void* arg) {
+    (void)arg;
+    
+    while(g_running) {
+        // 维持MQTT连接（非阻塞）
+        mqtt_loop(&g_mqtt_ctx);
+        usleep(10000); // 10ms检查间隔
     }
-
-    printf("收到来自主题 %s 的消息:\n", topicName);
-    printf("消息内容: %.*s\n", message->payloadlen, (char *)message->payload);
-
-    // 复制 JSON 数据，确保线程能安全使用
-    char *json_data = malloc(message->payloadlen + 1);
-    if (json_data) {
-        memcpy(json_data, message->payload, message->payloadlen);
-        json_data[message->payloadlen] = '\0';  // 确保字符串终止
-    }
-
-    // 创建新线程处理 JSON 解析和舵机控制
-    pthread_t thread;
-    if (pthread_create(&thread, NULL, json_parse_thread, json_data) != 0) {
-        perror("线程创建失败");
-        free(json_data);
-    } else {
-        pthread_detach(thread);  // 线程自动回收资源
-    }
-
-    MQTTClient_freeMessage(&message);
-    MQTTClient_free(topicName);
+    return NULL;
 }
 
-// 读取 240x240 16 位 RGB 图像并发布到 MQTT
-void publish_image(MQTTClient *client) {
-
-    FILE *file = fopen(IMAGE_FILE, "rb");
-    if (!file) {
-        perror("无法打开图像文件");
-        return;
+// 测试 get_camera_data 并通过MQTT发送到6818_image主题
+void test_camera_data_publish() {
+    unsigned char* buffer = NULL;
+    long size = 0;
+    get_camera_data(&buffer, &size);
+    if (buffer && size > 0) {
+        printf("[TEST] 成功读取图像数据，大小: %ld 字节，准备发送到6818_image主题\n", size);
+        if (mqtt_publish(&g_mqtt_ctx, "6818_image", buffer, size) == 0) {
+            printf("[TEST] 成功通过MQTT发送到6818_image主题\n");
+        } else {
+            printf("[TEST] 通过MQTT发送失败\n");
+        }
+        free(buffer);
+    } else {
+        printf("[TEST] 读取图像数据失败\n");
     }
-
-    fseek(file, 0, SEEK_END);
-    long fileSize = ftell(file);
-    rewind(file);
-
-    char *buffer = (char *)malloc(fileSize);
-    if (!buffer) {
-        perror("内存分配失败");
-        fclose(file);
-        return;
-    }
-
-    fread(buffer, 1, fileSize, file);
-    fclose(file);
-
-    MQTTClient_message pubmsg = {0};
-    pubmsg.payload = buffer;
-    pubmsg.payloadlen = fileSize;
-    pubmsg.qos = QOS;
-    pubmsg.retained = 0;
-
-    MQTTClient_deliveryToken token;
-    MQTTClient_publishMessage(*client, TOPIC_PUB, &pubmsg, &token);
-    MQTTClient_waitForCompletion(*client, token, TIMEOUT);
-    printf("成功发布图像文件 (%ld 字节) 到主题: %s\n", fileSize, TOPIC_PUB);
-
-    free(buffer);
 }
 
 int main() {
-    reset_engine();  // 初始化引擎
+    // 注册信号处理
+    signal(SIGINT, sig_handler);
+    signal(SIGTERM, sig_handler);
 
-    MQTTClient client;
-    MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
-    conn_opts.keepAliveInterval = 20;
-    conn_opts.cleansession = 1;
+    // // 初始化舵机
+    // if (engine_init() != 0) {
+    //     printf("舵机初始化失败，程序退出。\n");
+    //     return -1;
+    // }
 
-    // 创建 MQTT 客户端
-    MQTTClient_create(&client, ADDRESS, CLIENTID, MQTTCLIENT_PERSISTENCE_NONE, NULL);
-    MQTTClient_setCallbacks(client, NULL, NULL, messageArrived, NULL);
+    // 初始化MQTT
+    int mqtt_ok = mqtt_init(&g_mqtt_ctx, NULL);
+    if(mqtt_ok != 0) {
+        fprintf(stderr, "MQTT初始化失败\n");
+        engine_close();
+        return 1;
+    }
+    printf("MQTT连接成功，已订阅主题: %s\n", TOPIC_SUB);
 
-    // 连接到 MQTT 服务器
-    if (MQTTClient_connect(client, &conn_opts) != MQTTCLIENT_SUCCESS) {
-        fprintf(stderr, "连接到 MQTT 服务器失败\n");
-        return EXIT_FAILURE;
+    
+
+    // 创建监听线程
+    pthread_t listen_tid;
+    if(pthread_create(&listen_tid, NULL, mqtt_listen_thread, NULL) != 0) {
+        fprintf(stderr, "线程创建失败\n");
+        mqtt_disconnect(&g_mqtt_ctx);
+        engine_close();
+        return 1;
     }
 
-    // 订阅 6050_date 主题（实时监听）
-    MQTTClient_subscribe(client, TOPIC_SUB, QOS);
-    printf("已订阅主题: %s\n", TOPIC_SUB);
+    // 在主线程运行视频发布
+    // video_publish_thread(NULL);
+    // 测试：读取图像并发送到6818_image主题
+    test_camera_data_publish();
 
-    // 进入阻塞循环，保持客户端运行，实时监听数据
-    while (!finished) {
-        MQTTClient_yield();  // 保持 MQTT 客户端活跃，实时接收消息
-    }
+    // 等待监听线程结束
+    printf("MQTT持续监听...\n");
+    pthread_join(listen_tid, NULL);
+    
+    printf("正在关闭资源...\n");
+    sleep(5);
 
-    // 断开 MQTT 连接
-    MQTTClient_disconnect(client, 10000);
-    MQTTClient_destroy(&client);
-    return EXIT_SUCCESS;
+    // 清理资源
+    mqtt_disconnect(&g_mqtt_ctx);
+    // engine_close();
+    return 0;
 }

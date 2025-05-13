@@ -8,23 +8,29 @@
 #include <sys/ioctl.h>
 #include <string.h>
 #include <cjson/cJSON.h>
+#include <math.h>
+#include "config.h"
 
-// 舵机设备文件
-#define ENGINE_DEVICE "/dev/myengine"
+// 舵机编号定义
+#define Engine2 0x1
+#define Engine3 0x2
 
-// 舵机控制命令
-#define Engine2 0x1  // 左右转动
-#define Engine3 0x2  // 上下转动
-#define DEG_UNIT 1.8 // 舵机最小转动单位
-#define DELAY_MS 50  // 控制延时
-
-// 舵机角度
+// 全局变量声明
 extern double eng2_deg;
 extern double eng3_deg;
 
-// 解析 JSON 数据并更新舵机状态
+// 定义舵机控制参数结构体
+// struct engine_angle {
+//     int command;  // 控制命令（Engine2/Engine3）
+//     int steps;    // 转动步数（基于DEG_UNIT计算）
+// };
+
+void handle_angle_control(const char *json_data);
+int engine_init();
+void print_engine_angle();
 void parse_json_and_control(const char *json_data);
 void reset_engine();
 void control_engine(int command, double *angle, double new_angle);
+void engine_close();
 
-#endif // ENGINE_H
+#endif
