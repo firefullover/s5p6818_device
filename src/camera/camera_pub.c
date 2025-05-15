@@ -1,4 +1,4 @@
-#include "camera_pub.h"
+#include "camera/camera_pub.h"
 
 #define IMAGE_FILE "image.rgb"  // 临时测试文件，存储图像数据的文件路径
 

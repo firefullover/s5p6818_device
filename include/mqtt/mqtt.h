@@ -8,7 +8,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <MQTTClient.h>
-#include "config.h"
+#include <config.h>
 
 // 回调函数类型定义
 typedef void (*message_handler)(char* topic, char* payload);

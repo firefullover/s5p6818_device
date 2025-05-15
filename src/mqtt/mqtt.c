@@ -1,5 +1,5 @@
-#include "mqtt.h"
-#include "engine.h"  // 包含舵机控制头文件
+#include "mqtt/mqtt.h"
+#include "engine/engine.h"  // 包含舵机控制头文件
 
 // MQTT 消息送达回调函数
 static void delivered(void *context, MQTTClient_deliveryToken dt) {
