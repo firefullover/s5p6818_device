@@ -20,7 +20,7 @@ set(SRC_FILES
 
 add_executable(s5p6818_device_example ${SRC_FILES})
 
-# 链接 pthread 和 m（数学库）
+# 链接
 target_link_libraries(s5p6818_device_example 
     pthread 
     m
