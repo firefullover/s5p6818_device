@@ -4,14 +4,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <sys/time.h>
-#include <MQTTClient.h>
 #include <config.h>
+#include <MQTTClient.h>
 
 // 回调函数类型定义
-typedef void (*message_handler)(char* topic, char* payload);
+typedef void (*message_handler)(char* payload);
 
 // MQTT 上下文结构体
 typedef struct {

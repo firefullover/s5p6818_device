@@ -1,9 +1,12 @@
 #include "mqtt/mqtt.h"
 #include "engine/engine.h"  // 包含舵机控制头文件
+#include <string.h>
+#include <time.h>
+#include <sys/time.h>
+
 
 // MQTT 消息送达回调函数
 static void delivered(void *context, MQTTClient_deliveryToken dt) {
-    // 打印消息送达的 token，便于调试
     printf("消息已送达: %d\n", dt);
 }
 
@@ -21,15 +24,11 @@ static int msgarrvd(void *context, char *topicName, int topicLen,
             memcpy(payload, message->payload, message->payloadlen);
             payload[message->payloadlen] = '\0';
 
-            // 如果用户设置了消息处理回调，则调用用户的处理函数
-            if(ctx->handler) {
-                ctx->handler(topicName, payload);
-            }
-
-            // 如果主题名等于 TOPIC_SUB，则打印JSON内容并调用舵机控制的解析函数
+            // 如果主题名等于 TOPIC_SUB，则打印JSON内容并调用回调
             if(topicName && strcmp(topicName, TOPIC_SUB) == 0) {
-                printf("收到JSON控制消息: %s\n", payload);
-                // parse_json_and_control(payload); // 调用舵机库的解析函数
+                if(ctx->handler) {
+                    ctx->handler(payload);// 调用舵机库的解析函数
+                }
             }
         } else {
             fprintf(stderr, "内存分配失败\n");

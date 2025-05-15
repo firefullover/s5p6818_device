@@ -89,7 +89,7 @@ void* mqtt_listen_thread(void* arg) {
 }
 
 // 测试 get_camera_data 并通过MQTT发送到6818_image主题
-void test_camera_data_publish() {
+void* test_camera_data_publish(void* arg) {
     unsigned char* buffer = NULL;
     long size = 0;
     get_camera_data(&buffer, &size);
@@ -118,15 +118,13 @@ int main() {
     // }
 
     // 初始化MQTT
-    int mqtt_ok = mqtt_init(&g_mqtt_ctx, NULL);
+    int mqtt_ok = mqtt_init(&g_mqtt_ctx, parse_json_and_control);
     if(mqtt_ok != 0) {
         fprintf(stderr, "MQTT初始化失败\n");
         engine_close();
         return 1;
     }
     printf("MQTT连接成功，已订阅主题: %s\n", TOPIC_SUB);
-
-    
 
     // 创建监听线程
     pthread_t listen_tid;
@@ -137,18 +135,21 @@ int main() {
         return 1;
     }
 
-    // 在主线程运行视频发布
-    // video_publish_thread(NULL);
-    // 测试：读取图像并发送到6818_image主题
-    test_camera_data_publish();
+    // video_publish_thread();
+    // test_camera_data_publish();
 
-    // 等待监听线程结束
-    printf("MQTT持续监听...\n");
-    pthread_join(listen_tid, NULL);
+    // 创建视频发布线程
+    pthread_t video_tid;
+    if(pthread_create(&video_tid, NULL, test_camera_data_publish, NULL) != 0) {
+        fprintf(stderr, "视频发布线程创建失败\n");
+        mqtt_disconnect(&g_mqtt_ctx);
+        engine_close();
+        return 1;
+    }
     
-    printf("正在关闭资源...\n");
-    sleep(5);
-
+    pthread_join(listen_tid, NULL);
+    pthread_join(video_tid, NULL);
+    
     // 清理资源
     mqtt_disconnect(&g_mqtt_ctx);
     // engine_close();

@@ -1,5 +1,10 @@
 #include "engine/engine.h"
-
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <string.h>
+#include <cjson/cJSON.h>
+#include <math.h>
 
 // 舵机初始角度定义
 double eng2_deg = 90.0;
@@ -13,7 +18,7 @@ int engine_init() {
         perror("舵机设备初始化失败");
         return -1;
     }
-    printf("舵机设备打开\n");
+    reset_engine();
     return 0;
 }
 
@@ -34,6 +39,20 @@ void parse_json_and_control(const char *json_data) {
         printf("JSON 解析失败\n");
         return;
     }
+
+    /**
+     * json_data 格式:
+     * {
+     *   "cmd_type": "angle_control",
+     *   "angle_y": 45.0,
+     *   "angle_z": 45.0
+     * }
+     *
+     * 或者
+     * {
+     *   "cmd_type": "reset"
+     * }
+     */
 
     cJSON *cmd_type_obj = cJSON_GetObjectItem(root, "cmd_type");
     if (cmd_type_obj && cJSON_IsString(cmd_type_obj)) {
@@ -120,6 +139,7 @@ void control_engine(int command, double *angle, double new_angle) {
 
 void engine_close() {
     if (engine_fd >= 0) {
+        reset_engine();
         close(engine_fd);
         engine_fd = -1;
         printf("舵机设备已关闭\n");

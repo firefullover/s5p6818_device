@@ -3,12 +3,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#include <string.h>
-#include <cjson/cJSON.h>
-#include <math.h>
 #include <config.h>
 
 // 舵机编号定义
