@@ -142,7 +142,7 @@ int main() {
     // }
 
     // 初始化摄像头
-    g_camera_config.device = "/dev/video0"; // 摄像头设备路径
+    g_camera_config.device = CAMERA_DEVICE;
     g_camera_config.width = 240;
     g_camera_config.height = 240;
     g_camera_config.fps = TARGET_FPS;
