@@ -2,8 +2,8 @@ CC = gcc
 CFLAGS = -Wall -g
 LIBS = -ljpeg
 
-TARGET = jpg2rgb
-SRC = jpg2rgb.c
+TARGET = jpgtorgb
+SRC = jpgtorgb.c
 
 all: $(TARGET)
 

@@ -3,12 +3,18 @@
 #define MQTT_H
 
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdint.h>
 #include <config.h>
 #include <MQTTClient.h>
 
 // 回调函数类型定义
-typedef void (*message_handler)(char* payload);
+typedef void (*message_handler)(const char* payload);
+
+// mqtt视频帧头部
+typedef struct {
+    uint32_t frame_id;// 帧ID
+    uint32_t frame_len;// payload长度
+} __attribute__((packed)) frame_header_t;
 
 // MQTT 上下文结构体
 typedef struct {

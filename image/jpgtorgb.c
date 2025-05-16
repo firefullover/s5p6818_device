@@ -23,7 +23,7 @@ uint16_t rgb888_to_rgb565(uint8_t r, uint8_t g, uint8_t b) {
 
 int main() {
     const char* jpg_path = "firefly.jpg";
-    const char* rgb_path = "../../build/image.rgb";
+    const char* rgb_path = "../build/image.rgb";
     int target_w = 240, target_h = 240;
 
     // 1. 解码JPEG

@@ -1,6 +1,7 @@
 #include "mqtt/mqtt.h"
 #include "engine/engine.h"  // 包含舵机控制头文件
 #include <string.h>
+#include <stdlib.h>
 #include <time.h>
 #include <sys/time.h>
 
