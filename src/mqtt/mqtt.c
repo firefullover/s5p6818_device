@@ -8,10 +8,10 @@
 
 // MQTT 消息送达回调函数
 static void delivered(void *context, MQTTClient_deliveryToken dt) {
-    printf("消息已送达: %d\n", dt);
+    printf("消息已发布: %d\n", dt);
 }
 
-// MQTT 消息到达回调函数
+// MQTT 消息收到回调函数
 static int msgarrvd(void *context, char *topicName, int topicLen, 
                    MQTTClient_message *message) {
     mqtt_ctx* ctx = (mqtt_ctx*)context; // 获取上下文指针
@@ -25,7 +25,7 @@ static int msgarrvd(void *context, char *topicName, int topicLen,
             memcpy(payload, message->payload, message->payloadlen);
             payload[message->payloadlen] = '\0';
 
-            // 如果主题名等于 TOPIC_SUB，则打印JSON内容并调用回调
+            // 如果主题名等于 TOPIC_SUB，则打印消息内容并调用回调处理数据
             if(topicName && strcmp(topicName, TOPIC_SUB) == 0) {
                 if(ctx->handler) {
                     ctx->handler(payload);// 调用舵机库的解析函数

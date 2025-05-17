@@ -135,11 +135,11 @@ int main() {
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
 
-    // // 初始化舵机
-    // if (engine_init() != 0) {
-    //     printf("舵机初始化失败，程序退出。\n");
-    //     return -1;
-    // }
+    // 初始化舵机
+    if (engine_init() != 0) {
+        printf("舵机初始化失败，程序退出。\n");
+        return -1;
+    }
 
     // 初始化摄像头
     g_camera_config.device = CAMERA_DEVICE;
@@ -191,6 +191,6 @@ int main() {
     // 清理资源
     mqtt_disconnect(&g_mqtt_ctx);
     camera_deinit();
-    // engine_close();
+    engine_close();
     return 0;
 }
