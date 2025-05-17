@@ -3,7 +3,7 @@
 
 // ===================== MQTT配置 =====================
 // MQTT服务器地址
-#define DEFAULT_ADDRESS   "tcp://192.168.50.130:1883" 
+#define DEFAULT_ADDRESS   "tcp://192.168.1.95:1883" 
 // MQTT客户端ID，需唯一
 #define DEFAULT_CLIENT_ID "s5p6818_Client" // 设备标识名
 // MQTT消息服务质量等级，0=最多一次，1=至少一次，2=仅一次
@@ -22,6 +22,8 @@
 #define MAX_RECONNECT_ATTEMPTS 10 // 0为无限重试，建议设置上限防止死循环
 
 // ===================== 视频配置 =====================
+// 摄像头设备文件路径
+#define CAMERA_DEVICE     "/dev/video0"
 // 目标视频帧率（FPS），影响视频流畅度与带宽
 #define TARGET_FPS        10     // 建议5~30，过高占用带宽
 // 最大连续获取帧失败次数，超过后暂停一段时间
