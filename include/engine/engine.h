@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <config.h>
+#include <config/config.h>
 
 // 舵机编号定义
 #define Engine2 0x1

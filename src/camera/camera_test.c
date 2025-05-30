@@ -1,5 +1,4 @@
-#include "camera/camera_test.h"
-#include "config/config.h"
+#include <camera/camera_test.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -62,8 +61,8 @@ int camera_init(camera_config_t *config) {
     // 设置设备选项
     snprintf(device_format, sizeof(device_format), "video=%s", config->device);
     av_dict_set(&options, "framerate", "30", 0); // 设置采集帧率
-    av_dict_set(&options, "video_size", "640x480", 0); // 设置采集分辨率
-    av_dict_set(&options, "input_format", "mjpeg", 0); // 优先使用MJPEG格式
+    av_dict_set(&options, "video_size", "320x240", 0); // 设置采集分辨率为320x240（最接近目标240x240的支持分辨率）
+    av_dict_set(&options, "input_format", "mjpeg", 0); // 使用MJPEG格式（摄像头支持）
     
     // 打开视频设备
     AVInputFormat *input_format = av_find_input_format("v4l2"); // Linux下使用V4L2

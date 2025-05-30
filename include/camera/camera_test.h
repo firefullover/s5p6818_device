@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <config/config.h>
 
 // 摄像头配置结构体
 typedef struct {

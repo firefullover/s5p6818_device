@@ -18,10 +18,6 @@ pkg_check_modules(FFMPEG REQUIRED libavformat libavcodec libavutil libswscale li
 # 包含头文件目录
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/config
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/camera
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/engine
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/mqtt
     ${FFMPEG_INCLUDE_DIRS}  # 添加FFmpeg头文件目录
 )
 
@@ -33,6 +29,7 @@ set(SRC_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/mqtt/mqtt.c
 )
 
+# 生成可执行文件
 add_executable(s5p6818_device_example ${SRC_FILES})
 
 # 链接

@@ -4,7 +4,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
-#include <config.h>
+#include <config/config.h>
 #include <MQTTClient.h>
 
 // 回调函数类型定义
